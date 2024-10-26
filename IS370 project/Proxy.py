@@ -1,11 +1,16 @@
+##Proxy.py
+
+
 import socket
 import threading
+import requests
 from Cache import get_cached_response, cache_response
 from Firewall import is_blocked
 
 def handle_client(client_socket):
     try:
         request = client_socket.recv(4096).decode()
+        print(f"Request received: {request}")  # Print the request
         url = request.split(' ')[1]
 
         if is_blocked(url):
@@ -15,12 +20,21 @@ def handle_client(client_socket):
 
         cached_response = get_cached_response(url)
         if cached_response:
+            print("Came from cache.")
             client_socket.sendall(cached_response)
         else:
-            # Handle forwarding request to web server and caching (not fully implemented here)
-            response = b"HTTP response from web server"  # Placeholder for actual response
-            cache_response(url, response)
-            client_socket.sendall(response)
+            print("Fetching from web server.") ## send rerquest to web server
+            try:
+                response = requests.get(url)
+                # HTTP response
+                http_response = f"HTTP/1.1 {response.status_code} {response.reason}\r\n"
+                http_response += response.headers.as_string() + "\r\n"
+                http_response = http_response.encode() + response.content
+                cache_response(url, http_response)  # Cache the response
+                client_socket.sendall(http_response)
+            except Exception as e:
+                print(f"Error fetching from web server: {e}")
+                client_socket.sendall(b"HTTP/1.1 502 Bad Gateway\r\n\r\nError fetching response.")
         
         client_socket.close()
     except Exception as e:
@@ -37,3 +51,4 @@ def start_server(host, port):
         client_socket, _ = server_socket.accept()
         client_thread = threading.Thread(target=handle_client, args=(client_socket,))
         client_thread.start()
+start_server("localhost", 8080)

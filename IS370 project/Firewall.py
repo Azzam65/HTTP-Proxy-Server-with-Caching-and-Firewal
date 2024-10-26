@@ -1,3 +1,5 @@
+##firewall.py
+
 blocked_domains = ["blockedwebsite.com"]
 
 def is_blocked(url):
